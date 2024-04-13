@@ -3,6 +3,12 @@ const net = require("net");
 const args = process.argv;
 const cache = new Map();
 
+const globalConfig = {
+  PORT: 0,
+  MASTER_HOST: '',
+  MASTER_PORT: 0,
+}
+
 const replicationInfo = {
   connected_slaves: 0,
   master_replid: '8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb',
@@ -23,14 +29,32 @@ function getportFromArgs(args, defaultPort = 6379) {
   return defaultPort;
 }
 
+globalConfig.PORT = getportFromArgs(args);
+
 function configureReplication(args) {
   const replicaOfIndex = args.indexOf('--replicaof');
 
   if (replicaOfIndex !== -1 && args[replicaOfIndex + 1] && args[replicaOfIndex + 2]) {
     replicationInfo['role'] = 'slave';
+    globalConfig.MASTER_HOST = args[replicaOfIndex + 1];
+    globalConfig.MASTER_PORT = args[replicaOfIndex + 2];
   } else {
     replicationInfo['role'] = 'master';
   }
+}
+
+function replicaConnection() {
+  let stage = 'PING';
+  const replicaSocket = net.createConnection({
+    host: globalConfig.MASTER_HOST,
+    port: globalConfig.MASTER_PORT,
+  });
+
+  replicaSocket.on('connect', () => {
+    console.log(`Connected to master at ${globalConfig.MASTER_HOST}:${globalConfig.MASTER_PORT}`);
+    const command = getStringArray('ping');
+    replicaSocket.write(command);
+  });
 }
 
 // helper function to parse commands received
@@ -87,6 +111,24 @@ function cmdParser(data) {
     }
   }
   return results;
+}
+
+function getBulkString(str) {
+  if (str === null) {
+    return `\$-1\r\n`;
+  } else {
+    return `\$${str.length}\r\n${str}\r\n`;
+  }
+}
+
+function getStringArray(cmd) {
+  const args = [...arguments];
+  let result = '';
+  result += `\*${args.length}\r\n`
+  for (const arg of args) {
+    result += getBulkString(arg);
+  }
+  return result;
 }
 
 function formatSimpleError(message) {
@@ -166,7 +208,9 @@ function handleInfoCommand(commands) {
 }
 
 // main code
-configureReplication(process.argv);
+configureReplication(args);
+
+if (replicationInfo.role === 'slave') replicaConnection();
 
 const server = net.createServer((connection) => {
   connection.on('data', (data) => {
@@ -201,4 +245,4 @@ const server = net.createServer((connection) => {
   });
 });
 
-server.listen(getportFromArgs(args), "127.0.0.1");
+server.listen(globalConfig.PORT, "127.0.0.1");
