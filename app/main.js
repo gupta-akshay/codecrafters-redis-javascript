@@ -37,7 +37,7 @@ function configureReplication(args) {
   if (replicaOfIndex !== -1 && args[replicaOfIndex + 1] && args[replicaOfIndex + 2]) {
     replicationInfo['role'] = 'slave';
     globalConfig.MASTER_HOST = args[replicaOfIndex + 1];
-    globalConfig.MASTER_PORT = args[replicaOfIndex + 2];
+    globalConfig.MASTER_PORT = Number(args[replicaOfIndex + 2]);
   } else {
     replicationInfo['role'] = 'master';
   }
@@ -54,6 +54,32 @@ function replicaConnection() {
     console.log(`Connected to master at ${globalConfig.MASTER_HOST}:${globalConfig.MASTER_PORT}`);
     const command = getStringArray('ping');
     replicaSocket.write(command);
+  });
+
+  replicaSocket.on('data', (data) => {
+    const commands = cmdParser(data);
+    console.log(`\nReponse to replica: ${commands}`);
+
+    let command = commands.shift().toUpperCase();
+
+    switch (stage) {
+      case 'PING':
+        if (command === 'PONG') {
+          const cmd = getStringArray('REPLCONF', 'listening-port', `${globalConfig.PORT}`);
+          replicaSocket.write(cmd);
+          stage = 'REPLCONF1';
+        }
+        break;
+      case 'REPLCONF1':
+        if (command === 'OK') {
+          const cmd = getStringArray('REPLCONF', 'capa', 'psync2');
+          replicaSocket.write(cmd);
+          stage = 'REPLCONF2';
+        }
+        break;
+      default:
+        return;
+    }
   });
 }
 
@@ -87,7 +113,10 @@ function cmdParser(data) {
       return;
     }
     switch (currentParameter[0]) {
-      case '$':
+      case '+': // simple string
+        results.push(currentParameter.slice(1));
+        break;
+      case '$': // bulk string
         if (currentParameter.length < 2) {
           console.log('Error: Malformed parameter');
           return;
@@ -106,7 +135,7 @@ function cmdParser(data) {
         }
         break;
       default:
-        console.log('Warning: Unrecognized parameter type');
+        console.log(`Warning: Unrecognized parameter type - ${currentParameter[0]}`);
         return;
     }
   }
@@ -237,6 +266,9 @@ const server = net.createServer((connection) => {
         break;
       case 'INFO':
         response = handleInfoCommand(commands);
+        break;
+      case 'REPLCONF':
+        response = formatSimpleString('OK');
         break;
       default:
         response = formatSimpleError(`Command ${command} not managed`);
