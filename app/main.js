@@ -82,12 +82,27 @@ function handleEchoCommand(commands) {
 
 function handleSetCommand(commands) {
   if (commands.length < 2) {
-    return formatSimpleError('Syntax: SET key value');
+    return formatSimpleError('Syntax: SET key value [PX milliseconds]');
   }
   
   let key = commands.shift();
   let value = commands.shift();
+  let pxTime = 0;
+
+  while (commands.length > 0) {
+    let parameter = commands.shift().toUpperCase();
+    if (parameter === 'PX') {
+      if (commands.length === 0) {
+        return formatSimpleError('Syntax: SET key value [PX milliseconds]');
+      }
+      pxTime = Number(commands.shift());
+    }
+  }
+
   cache.set(key, value);
+  if (pxTime > 0) {
+    setTimeout(() => cache.delete(key), pxTime);
+  }
 
   return formatSimpleString('OK');
 }
