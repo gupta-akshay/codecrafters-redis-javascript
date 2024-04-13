@@ -1,6 +1,21 @@
 const net = require("net");
 
+const args = process.argv;
 const cache = new Map();
+
+// Utility to find and parse the port from command-line arguments
+function getportFromArgs(args, defaultPort = 6379) {
+  // looking for the '--port' argument in command line
+  const portIndex = args.indexOf('--port');
+
+  // check if '--port' is present and has a following argument
+  if (portIndex !== -1 && args[portIndex + 1]) {
+    return Number(args[portIndex + 1]);
+  }
+
+  // return default port if '--port' is not specified
+  return defaultPort;
+}
 
 // helper function to parse commands received
 function cmdParser(data) {
@@ -151,4 +166,4 @@ const server = net.createServer((connection) => {
   });
 });
 
-server.listen(6379, "127.0.0.1");
+server.listen(getportFromArgs(args), "127.0.0.1");
