@@ -77,6 +77,13 @@ function replicaConnection() {
           stage = 'REPLCONF2';
         }
         break;
+      case 'REPLCONF2':
+        if (command === 'OK') {
+          const cmd = getStringArray('PSYNC', '?', '-1');
+          replicaSocket.write(cmd);
+          stage = 'PSYNC';
+        }
+        break;
       default:
         return;
     }
@@ -269,6 +276,9 @@ const server = net.createServer((connection) => {
         break;
       case 'REPLCONF':
         response = formatSimpleString('OK');
+        break;
+      case 'PSYNC':
+        response = formatSimpleString(`FULLRESYNC ${replicationInfo.master_replid} 0`);
         break;
       default:
         response = formatSimpleError(`Command ${command} not managed`);
