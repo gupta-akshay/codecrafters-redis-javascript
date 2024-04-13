@@ -1,5 +1,7 @@
 const net = require("net");
 
+const cache = new Map();
+
 // helper function to parse commands received
 function cmdParser(data) {
   let currentParameter = '',
@@ -78,6 +80,31 @@ function handleEchoCommand(commands) {
   return formatBulkString(commands.shift());
 }
 
+function handleSetCommand(commands) {
+  if (commands.length < 2) {
+    return formatSimpleError('Syntax: SET key value');
+  }
+  
+  let key = commands.shift();
+  let value = commands.shift();
+  cache.set(key, value);
+
+  return formatSimpleString('OK');
+}
+
+function handleGetCommand(commands) {
+  if (commands.length < 1) {
+    return formatSimpleError('Syntax: GET key');
+  }
+  
+  let key = commands.shift();
+  if (cache.has(key)) {
+    return formatBulkString(cache.get(key));
+  }
+
+  return formatBulkString(null);
+}
+
 // main code
 const server = net.createServer((connection) => {
   connection.on('data', (data) => {
@@ -95,6 +122,12 @@ const server = net.createServer((connection) => {
         break;
       case 'ECHO':
         response = handleEchoCommand(commands);
+        break;
+      case 'SET':
+        response = handleSetCommand(commands);
+        break;
+      case 'GET':
+        response = handleGetCommand(commands);
         break;
       default:
         response = formatSimpleError(`Command ${command} not managed`);
