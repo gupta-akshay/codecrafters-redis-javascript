@@ -3,6 +3,13 @@ const net = require("net");
 const args = process.argv;
 const cache = new Map();
 
+const replicationInfo = {
+  role: 'master',
+  connected_slaves: 0,
+  master_replid: '8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb',
+  master_repl_offset: 0
+};
+
 // Utility to find and parse the port from command-line arguments
 function getportFromArgs(args, defaultPort = 6379) {
   // looking for the '--port' argument in command line
@@ -135,6 +142,20 @@ function handleGetCommand(commands) {
   return formatBulkString(null);
 }
 
+function handleInfoCommand(commands) {
+  if (commands.length < 1) {
+    return formatSimpleError('Syntax: INFO [section]');
+  }
+  let section = commands.shift();
+  if (section === 'replication') {
+    let infoString = Object.entries(replicationInfo)
+      .map(([key, value]) => `${key}:${value}\r\n`)
+      .join('');
+    return formatBulkString(infoString);
+  }
+  return formatSimpleError('Invalid section specified');
+}
+
 // main code
 const server = net.createServer((connection) => {
   connection.on('data', (data) => {
@@ -158,6 +179,9 @@ const server = net.createServer((connection) => {
         break;
       case 'GET':
         response = handleGetCommand(commands);
+        break;
+      case 'INFO':
+        response = handleInfoCommand(commands);
         break;
       default:
         response = formatSimpleError(`Command ${command} not managed`);
