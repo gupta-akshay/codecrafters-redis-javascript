@@ -4,7 +4,6 @@ const args = process.argv;
 const cache = new Map();
 
 const replicationInfo = {
-  role: 'master',
   connected_slaves: 0,
   master_replid: '8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb',
   master_repl_offset: 0
@@ -22,6 +21,16 @@ function getportFromArgs(args, defaultPort = 6379) {
 
   // return default port if '--port' is not specified
   return defaultPort;
+}
+
+function configureReplication(args) {
+  const replicaOfIndex = args.indexOf('--replicaof');
+
+  if (replicaOfIndex !== -1 && args[replicaOfIndex + 1] && args[replicaOfIndex + 2]) {
+    replicationInfo['role'] = 'slave';
+  } else {
+    replicationInfo['role'] = 'master';
+  }
 }
 
 // helper function to parse commands received
@@ -157,6 +166,8 @@ function handleInfoCommand(commands) {
 }
 
 // main code
+configureReplication(process.argv);
+
 const server = net.createServer((connection) => {
   connection.on('data', (data) => {
     // Parsing incoming data into commands
