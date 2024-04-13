@@ -284,6 +284,13 @@ const server = net.createServer((connection) => {
         response = formatSimpleError(`Command ${command} not managed`);
     }
     connection.write(response);
+
+    if (command === 'PSYNC') {
+      const rdbFileBase64 = 'UkVESVMwMDEx+glyZWRpcy12ZXIFNy4yLjD6CnJlZGlzLWJpdHPAQPoFY3RpbWXCbQi8ZfoIdXNlZC1tZW3CsMQQAPoIYW9mLWJhc2XAAP/wbjv+wP9aog==';
+      const rdbBuffer = Buffer.from(rdbFileBase64, 'base64');
+      const rdbHead = Buffer.from(`$${rdbBuffer.length}\r\n`);
+      connection.write(Buffer.concat([rdbHead, rdbBuffer]));
+    }
   });
 });
 
