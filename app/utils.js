@@ -75,6 +75,11 @@ function parseCommandChunks(data) {
     currentIndex = nextCommandStart === -1 ? data.length : nextCommandStart;
   }
 
+  if (commandChunks[commandChunks.length - 1] === '*\r\n') {
+    commandChunks.pop();
+    commandChunks[commandChunks.length - 1] = commandChunks[commandChunks.length - 1] + '*\r\n';
+  }
+
   return commandChunks;
 }
 
@@ -136,6 +141,11 @@ function generateCommandToPropagate(commands) {
   return formattedCommands.join('\r\n') + '\r\n';
 }
 
+function encodeArray(data) {
+  const payload = data.map(line => `$${line.length}\r\n${line}`).join('\r\n');
+  return `*${data.length}\r\n${payload}\r\n`;
+}
+
 function sendMessage(connection, message) {
   if (connection && connection.write) {
     connection.write(message);
@@ -144,6 +154,7 @@ function sendMessage(connection, message) {
 
 module.exports = {
   cmdParser,
+  encodeArray,
   getStringArray,
   formatSimpleString,
   formatSimpleError,

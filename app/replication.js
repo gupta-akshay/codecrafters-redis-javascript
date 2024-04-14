@@ -60,7 +60,7 @@ function replicaConnection() {
         // Now ready to receive propagated commands and process them without responding
         const requests = parseCommandChunks(data.toString());
         requests.forEach(request => {
-          handleCommands(null, request);
+          handleCommands(replicaSocket, request, true);
         });
       default:
         return;

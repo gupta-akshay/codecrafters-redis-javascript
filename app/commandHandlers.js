@@ -3,6 +3,7 @@ const {
   formatSimpleString,
   formatSimpleError,
   formatBulkString,
+  encodeArray,
   generateCommandToPropagate,
   sendMessage
 } = require('./utils');
@@ -70,7 +71,15 @@ function handleInfoCommand(commands) {
   return formatSimpleError('Invalid section specified');
 }
 
-function handleCommands(connection, data) {
+function handleReplConfCommand(commands) {
+  let section = commands.shift();
+  if (section.toLowerCase() === 'getack') {
+    return encodeArray(['REPLCONF', 'ACK', '0']);
+  }
+  return formatSimpleString('OK');
+}
+
+function handleCommands(connection, data, fromReplica = false) {
   // Parsing incoming data into commands
   const commands = cmdParser(data);
   console.log(`\nReceived Commands: ${commands}`);
@@ -82,16 +91,16 @@ function handleCommands(connection, data) {
   switch(command) {
     case 'PING':
       response = formatSimpleString('PONG');
-      sendMessage(connection, response);
+      if (!fromReplica) sendMessage(connection, response);
       break;
     case 'ECHO':
       response = handleEchoCommand(commands);
-      sendMessage(connection, response);
+      if (!fromReplica) sendMessage(connection, response);
       break;
     case 'SET':
       const commandsCopy = [...commands];
       response = handleSetCommand(commands);
-      sendMessage(connection, response);
+      if (!fromReplica) sendMessage(connection, response);
       if (replicationInfo.role === 'master') {
         globalConfig.REPLICAS.forEach(replica => {
           const commandToPropagate = generateCommandToPropagate(['*', 'SET', ...commandsCopy]);
@@ -101,14 +110,14 @@ function handleCommands(connection, data) {
       break;
     case 'GET':
       response = handleGetCommand(commands);
-      sendMessage(connection, response);
+      if (!fromReplica) sendMessage(connection, response);
       break;
     case 'INFO':
       response = handleInfoCommand(commands);
-      sendMessage(connection, response);
+      if (!fromReplica) sendMessage(connection, response);
       break;
     case 'REPLCONF':
-      response = formatSimpleString('OK');
+      response = handleReplConfCommand(commands)
       sendMessage(connection, response);
       break;
     case 'PSYNC':
