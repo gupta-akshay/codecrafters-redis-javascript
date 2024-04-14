@@ -1,5 +1,12 @@
-const { formatSimpleString, formatSimpleError, formatBulkString } = require('./utils');
-const { replicationInfo } = require('./config');
+const {
+  cmdParser,
+  formatSimpleString,
+  formatSimpleError,
+  formatBulkString,
+  generateCommandToPropagate,
+  sendMessage
+} = require('./utils');
+const { replicationInfo, globalConfig } = require('./config');
 const cache = new Map();
 
 function handleEchoCommand(commands) {
@@ -63,4 +70,65 @@ function handleInfoCommand(commands) {
   return formatSimpleError('Invalid section specified');
 }
 
-module.exports = { handleEchoCommand, handleSetCommand, handleGetCommand, handleInfoCommand };
+function handleCommands(connection, data) {
+  // Parsing incoming data into commands
+  const commands = cmdParser(data);
+  console.log(`\nReceived Commands: ${commands}`);
+
+  // Extracting first command and converting it to uppercase
+  let command = commands.shift().toUpperCase();
+  let response = '';
+
+  switch(command) {
+    case 'PING':
+      response = formatSimpleString('PONG');
+      sendMessage(connection, response);
+      break;
+    case 'ECHO':
+      response = handleEchoCommand(commands);
+      sendMessage(connection, response);
+      break;
+    case 'SET':
+      const commandsCopy = [...commands];
+      response = handleSetCommand(commands);
+      sendMessage(connection, response);
+      if (replicationInfo.role === 'master') {
+        globalConfig.REPLICAS.forEach(replica => {
+          const commandToPropagate = generateCommandToPropagate(['*', 'SET', ...commandsCopy]);
+          sendMessage(replica, commandToPropagate);
+        });
+      }
+      break;
+    case 'GET':
+      response = handleGetCommand(commands);
+      sendMessage(connection, response);
+      break;
+    case 'INFO':
+      response = handleInfoCommand(commands);
+      sendMessage(connection, response);
+      break;
+    case 'REPLCONF':
+      response = formatSimpleString('OK');
+      sendMessage(connection, response);
+      break;
+    case 'PSYNC':
+      response = formatSimpleString(`FULLRESYNC ${replicationInfo.master_replid} 0`);
+      sendMessage(connection, response);
+      const rdbFileBase64 = 'UkVESVMwMDEx+glyZWRpcy12ZXIFNy4yLjD6CnJlZGlzLWJpdHPAQPoFY3RpbWXCbQi8ZfoIdXNlZC1tZW3CsMQQAPoIYW9mLWJhc2XAAP/wbjv+wP9aog==';
+      const rdbBuffer = Buffer.from(rdbFileBase64, 'base64');
+      const rdbHead = Buffer.from(`$${rdbBuffer.length}\r\n`);
+      sendMessage(connection, Buffer.concat([rdbHead, rdbBuffer]));
+      globalConfig.REPLICAS.push(connection);
+      break;
+    default:
+      response = formatSimpleError(`Command ${command} not managed`);
+  }
+}
+
+module.exports = {
+  handleEchoCommand,
+  handleSetCommand,
+  handleGetCommand,
+  handleInfoCommand,
+  handleCommands,
+};

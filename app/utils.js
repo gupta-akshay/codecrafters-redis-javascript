@@ -89,4 +89,41 @@ function formatBulkString(message) {
   return `$${message.length}\r\n${message}\r\n`;
 }
 
-module.exports = { cmdParser, getStringArray, formatSimpleString, formatSimpleError, formatBulkString };
+function generateCommandToPropagate(commands) {
+  if (commands.length === 0) return '$-1\r\n';
+
+  const formattedCommands = [];
+
+  for (let i = 0; i < commands.length; i++) {
+    const element = commands[i];
+
+    if (element[0] === '+') {
+      formattedCommands.push(element);
+    } else if (element[0] === '*') {
+      formattedCommands.push(`*${commands.length - 1}`);
+    } else if (element[0] !== '$') {
+      formattedCommands.push('$' + element.length.toString());
+      formattedCommands.push(element);
+    } else {
+      formattedCommands.push(element);
+      formattedCommands.push(commands[i + 1]);
+      i++;
+    }
+  }
+
+  return formattedCommands.join('\r\n') + '\r\n';
+}
+
+function sendMessage(connection, message) {
+  connection.write(message);
+}
+
+module.exports = {
+  cmdParser,
+  getStringArray,
+  formatSimpleString,
+  formatSimpleError,
+  formatBulkString,
+  generateCommandToPropagate,
+  sendMessage,
+};

@@ -4,6 +4,7 @@ const globalConfig = {
   PORT: 0,
   MASTER_HOST: '',
   MASTER_PORT: 0,
+  REPLICAS: [],
 }
 
 const replicationInfo = {

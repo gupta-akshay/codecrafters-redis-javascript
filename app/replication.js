@@ -1,6 +1,6 @@
 const net = require('net');
 const { globalConfig, replicationInfo } = require('./config');
-const { cmdParser, getStringArray } = require('./utils');
+const { cmdParser, getStringArray, sendMessage } = require('./utils');
 
 function configureReplication(args) {
   const replicaOfIndex = args.indexOf('--replicaof');
@@ -24,7 +24,7 @@ function replicaConnection() {
   replicaSocket.on('connect', () => {
     console.log(`Connected to master at ${globalConfig.MASTER_HOST}:${globalConfig.MASTER_PORT}`);
     const command = getStringArray('ping');
-    replicaSocket.write(command);
+    sendMessage(replicaSocket, command);
   });
 
   replicaSocket.on('data', (data) => {
@@ -37,21 +37,21 @@ function replicaConnection() {
       case 'PING':
         if (command === 'PONG') {
           const cmd = getStringArray('REPLCONF', 'listening-port', `${globalConfig.PORT}`);
-          replicaSocket.write(cmd);
+          sendMessage(replicaSocket, cmd);
           stage = 'REPLCONF1';
         }
         break;
       case 'REPLCONF1':
         if (command === 'OK') {
           const cmd = getStringArray('REPLCONF', 'capa', 'psync2');
-          replicaSocket.write(cmd);
+          sendMessage(replicaSocket, cmd);
           stage = 'REPLCONF2';
         }
         break;
       case 'REPLCONF2':
         if (command === 'OK') {
           const cmd = getStringArray('PSYNC', '?', '-1');
-          replicaSocket.write(cmd);
+          sendMessage(replicaSocket, cmd);
           stage = 'PSYNC';
         }
         break;
@@ -59,6 +59,10 @@ function replicaConnection() {
         return;
     }
   });
+
+  // replicaSocket.on('error', (error) => {
+  //   console.log('Error Occurred: ', error);
+  // });
 }
 
 module.exports = { configureReplication, replicaConnection };
