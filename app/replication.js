@@ -1,6 +1,7 @@
 const net = require('net');
 const { globalConfig, replicationInfo } = require('./config');
-const { cmdParser, getStringArray, sendMessage } = require('./utils');
+const { cmdParser, getStringArray, sendMessage, parseCommandChunks } = require('./utils');
+const { handleCommands } = require('./commandHandlers');
 
 function configureReplication(args) {
   const replicaOfIndex = args.indexOf('--replicaof');
@@ -55,6 +56,12 @@ function replicaConnection() {
           stage = 'PSYNC';
         }
         break;
+      case 'PSYNC':
+        // Now ready to receive propagated commands and process them without responding
+        const requests = parseCommandChunks(data.toString());
+        requests.forEach(request => {
+          handleCommands(null, request);
+        });
       default:
         return;
     }

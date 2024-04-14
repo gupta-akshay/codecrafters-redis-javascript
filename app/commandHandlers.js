@@ -21,7 +21,7 @@ function handleSetCommand(commands) {
     return formatSimpleError('Syntax: SET key value [PX milliseconds]');
   }
   
-  let key = commands.shift();
+  let key = commands.shift().toLowerCase();
   let value = commands.shift();
   let pxTime = 0;
 
@@ -48,7 +48,7 @@ function handleGetCommand(commands) {
     return formatSimpleError('Syntax: GET key');
   }
   
-  let key = commands.shift();
+  let key = commands.shift().toLowerCase();
   if (cache.has(key)) {
     return formatBulkString(cache.get(key));
   }

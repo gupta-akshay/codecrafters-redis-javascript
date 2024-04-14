@@ -41,7 +41,7 @@ function cmdParser(data) {
           break;
         } else {
           let actualString = dataLines.shift();
-          if (actualString.length !== expectedLength) {
+          if (actualString && actualString.length !== expectedLength) {
             console.log('Error: String length mismatch');
             return;
           }
@@ -54,6 +54,28 @@ function cmdParser(data) {
     }
   }
   return results;
+}
+
+function parseCommandChunks(data) {
+  let currentIndex = 0; // start at the beginning of the data string
+  const commandChunks = []; // this will store each parsed command chunk
+
+  // loop throught the entire string to find all command chunks
+  while (currentIndex < data.length) {
+    // find the start index of the next command, indicated by '*'
+    const nextCommandStart = data.indexOf('*', currentIndex + 1);
+    // determine the end of the current chunk: either the start of the next command chunk or the end of the data
+    const currentChunkEnd = nextCommandStart === -1 ? data.length : nextCommandStart;
+    // extract the command chunk from currentIndex to the determined end
+    if (currentIndex !== currentChunkEnd) { // ensure that we do no include empty command
+      commandChunks.push(data.substring(currentIndex, currentChunkEnd));
+    }
+    // move the currentIndex to the start of the next command
+    // if no next command, break the loop by setting currentIndex to data.length
+    currentIndex = nextCommandStart === -1 ? data.length : nextCommandStart;
+  }
+
+  return commandChunks;
 }
 
 function getBulkString(str) {
@@ -115,7 +137,9 @@ function generateCommandToPropagate(commands) {
 }
 
 function sendMessage(connection, message) {
-  connection.write(message);
+  if (connection && connection.write) {
+    connection.write(message);
+  }
 }
 
 module.exports = {
@@ -126,4 +150,5 @@ module.exports = {
   formatBulkString,
   generateCommandToPropagate,
   sendMessage,
+  parseCommandChunks,
 };
