@@ -5,7 +5,8 @@ const {
   formatBulkString,
   encodeArray,
   generateCommandToPropagate,
-  sendMessage
+  sendMessage,
+  updateBytesProcessed
 } = require('./utils');
 const { replicationInfo, globalConfig } = require('./config');
 const cache = new Map();
@@ -64,6 +65,7 @@ function handleInfoCommand(commands) {
   let section = commands.shift();
   if (section === 'replication') {
     let infoString = Object.entries(replicationInfo)
+      .filter(([key, value]) => key !== 'bytesProcessed')
       .map(([key, value]) => `${key}:${value}\r\n`)
       .join('');
     return formatBulkString(infoString);
@@ -72,11 +74,51 @@ function handleInfoCommand(commands) {
 }
 
 function handleReplConfCommand(commands) {
-  let section = commands.shift();
-  if (section.toLowerCase() === 'getack') {
-    return encodeArray(['REPLCONF', 'ACK', '0']);
+  let subcommand = commands.shift().toLowerCase();
+  if (subcommand === 'getack') {
+    const offsetResponse = encodeArray(['REPLCONF', 'ACK', `${replicationInfo.bytesProcessed}`]);
+    // replicationInfo.bytesProcessed = 0;
+    return offsetResponse;
   }
   return formatSimpleString('OK');
+}
+
+function handlePsyncCommand(connection) {
+  const response = formatSimpleString(`FULLRESYNC ${replicationInfo.master_replid} 0`);
+  sendMessage(connection, response);
+  const rdbFileBase64 = 'UkVESVMwMDEx+glyZWRpcy12ZXIFNy4yLjD6CnJlZGlzLWJpdHPAQPoFY3RpbWXCbQi8ZfoIdXNlZC1tZW3CsMQQAPoIYW9mLWJhc2XAAP/wbjv+wP9aog==';
+  const rdbBuffer = Buffer.from(rdbFileBase64, 'base64');
+  const rdbHead = Buffer.from(`$${rdbBuffer.length}\r\n`);
+  sendMessage(connection, Buffer.concat([rdbHead, rdbBuffer]));
+  globalConfig.REPLICAS.push(connection);
+}
+
+function replicateCommand(command, commands) {
+  const commandsCopy = [...commands];
+  globalConfig.REPLICAS.forEach(replica => {
+    const commandToPropagate = generateCommandToPropagate(['*', command, ...commandsCopy]);
+    sendMessage(replica, commandToPropagate);
+  });
+}
+
+function processCommand(command, commands, connection, fromReplica) {
+  switch(command) {
+    case 'PING':
+      return formatSimpleString('PONG');
+    case 'ECHO':
+      return handleEchoCommand(commands);
+    case 'SET':
+      const commandsCopy = [...commands];
+      const response = handleSetCommand(commands);
+      if (replicationInfo.role === 'master' && !fromReplica) {
+        replicateCommand('SET', commandsCopy);
+      }
+      return response;
+    case 'GET':
+      return handleGetCommand(commands);
+    case 'INFO':
+      return handleInfoCommand(commands);
+  }
 }
 
 function handleCommands(connection, data, fromReplica = false) {
@@ -90,47 +132,27 @@ function handleCommands(connection, data, fromReplica = false) {
 
   switch(command) {
     case 'PING':
-      response = formatSimpleString('PONG');
-      if (!fromReplica) sendMessage(connection, response);
-      break;
     case 'ECHO':
-      response = handleEchoCommand(commands);
-      if (!fromReplica) sendMessage(connection, response);
-      break;
     case 'SET':
-      const commandsCopy = [...commands];
-      response = handleSetCommand(commands);
-      if (!fromReplica) sendMessage(connection, response);
-      if (replicationInfo.role === 'master') {
-        globalConfig.REPLICAS.forEach(replica => {
-          const commandToPropagate = generateCommandToPropagate(['*', 'SET', ...commandsCopy]);
-          sendMessage(replica, commandToPropagate);
-        });
-      }
-      break;
     case 'GET':
-      response = handleGetCommand(commands);
-      if (!fromReplica) sendMessage(connection, response);
-      break;
     case 'INFO':
-      response = handleInfoCommand(commands);
+      response = processCommand(command, commands, connection, fromReplica);
       if (!fromReplica) sendMessage(connection, response);
       break;
     case 'REPLCONF':
-      response = handleReplConfCommand(commands)
+      response = handleReplConfCommand(commands);
       sendMessage(connection, response);
       break;
     case 'PSYNC':
-      response = formatSimpleString(`FULLRESYNC ${replicationInfo.master_replid} 0`);
-      sendMessage(connection, response);
-      const rdbFileBase64 = 'UkVESVMwMDEx+glyZWRpcy12ZXIFNy4yLjD6CnJlZGlzLWJpdHPAQPoFY3RpbWXCbQi8ZfoIdXNlZC1tZW3CsMQQAPoIYW9mLWJhc2XAAP/wbjv+wP9aog==';
-      const rdbBuffer = Buffer.from(rdbFileBase64, 'base64');
-      const rdbHead = Buffer.from(`$${rdbBuffer.length}\r\n`);
-      sendMessage(connection, Buffer.concat([rdbHead, rdbBuffer]));
-      globalConfig.REPLICAS.push(connection);
+      handlePsyncCommand(connection);
       break;
     default:
       response = formatSimpleError(`Command ${command} not managed`);
+  }
+
+  // Update bytes processed at the entry point of command processing
+  if (fromReplica && !command.includes('FULLRESYNC')) {
+    updateBytesProcessed(data);
   }
 }
 

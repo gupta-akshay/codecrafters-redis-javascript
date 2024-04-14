@@ -32,7 +32,11 @@ function replicaConnection() {
     const commands = cmdParser(data);
     console.log(`\nReponse to replica: ${commands}`);
 
-    let command = commands.shift().toUpperCase();
+    if (!commands) return;
+    let command = commands.shift();
+
+    if (!command) return;
+    command = command.toUpperCase();
 
     switch (stage) {
       case 'PING':
@@ -57,11 +61,18 @@ function replicaConnection() {
         }
         break;
       case 'PSYNC':
+        if (command.indexOf('FULLRESYNC') > 0) {
+          stage = 'SYNCDONE';
+          break;
+        }
+      case 'SYNCDONE':
         // Now ready to receive propagated commands and process them without responding
         const requests = parseCommandChunks(data.toString());
+        console.log('requests --', requests);
         requests.forEach(request => {
           handleCommands(replicaSocket, request, true);
         });
+        break;
       default:
         return;
     }

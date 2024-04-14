@@ -1,3 +1,5 @@
+const { replicationInfo } = require('./config');
+
 function cmdParser(data) {
   let currentParameter = '',
     results = [];
@@ -152,6 +154,11 @@ function sendMessage(connection, message) {
   }
 }
 
+function updateBytesProcessed(data) {
+  const commandLength = Buffer.byteLength(data.toString(), 'utf8');
+  replicationInfo.bytesProcessed += commandLength;
+}
+
 module.exports = {
   cmdParser,
   encodeArray,
@@ -162,4 +169,5 @@ module.exports = {
   generateCommandToPropagate,
   sendMessage,
   parseCommandChunks,
+  updateBytesProcessed,
 };
