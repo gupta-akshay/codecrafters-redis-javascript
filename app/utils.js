@@ -1,4 +1,4 @@
-const { replicationInfo } = require('./config');
+const { replicationInfo, globalConfig } = require('./config');
 
 function cmdParser(data) {
   let currentParameter = '',
@@ -111,6 +111,10 @@ function formatSimpleString(message) {
   return `+${message}\r\n`;
 }
 
+function formatSimpleInteger(integer) {
+  return `:${integer}\r\n`;
+}
+
 function formatBulkString(message) {
   if (message === null) {
     return '$-1\r\n';
@@ -159,6 +163,10 @@ function updateBytesProcessed(data) {
   replicationInfo.bytesProcessed += commandLength;
 }
 
+function getNumberOfReplicas() {
+  return globalConfig.REPLICAS.length;
+}
+
 module.exports = {
   cmdParser,
   encodeArray,
@@ -170,4 +178,6 @@ module.exports = {
   sendMessage,
   parseCommandChunks,
   updateBytesProcessed,
+  formatSimpleInteger,
+  getNumberOfReplicas,
 };

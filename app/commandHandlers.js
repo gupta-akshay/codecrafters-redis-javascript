@@ -6,7 +6,9 @@ const {
   encodeArray,
   generateCommandToPropagate,
   sendMessage,
-  updateBytesProcessed
+  updateBytesProcessed,
+  formatSimpleInteger,
+  getNumberOfReplicas,
 } = require('./utils');
 const { replicationInfo, globalConfig } = require('./config');
 const cache = new Map();
@@ -74,8 +76,8 @@ function handleInfoCommand(commands) {
 }
 
 function handleWaitCommand(commands) {
-  console.log('commands', commands);
-  return ':0\r\n';
+  const numberOfSlaves = getNumberOfReplicas();
+  return formatSimpleInteger(numberOfSlaves);
 }
 
 function handleReplConfCommand(commands) {
