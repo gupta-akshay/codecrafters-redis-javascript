@@ -40,6 +40,14 @@ function init(args) {
       return server.startServer();
     }
   }
+
+  if (flag === '--dir') {
+    const config = {};
+    config.dir = args[1];
+    config.dbFilename = args[3];
+    const server = new MasterServer(HOST, PORT, config);
+    server.startServer();
+  }
 }
 
 init(process.argv.slice(2));
