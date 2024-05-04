@@ -425,6 +425,7 @@ class MasterServer {
     }
 
     socket.write(Encoder.createBulkString(entryId));
+    this.checkBlock();
   }
 
   /**
@@ -460,6 +461,13 @@ class MasterServer {
     return Encoder.createArray(toReturn);
   }
 
+  /**
+   * Handles the XREAD command.
+   *
+   * @param {Array} args - The arguments passed to the XREAD command.
+   * @param {Socket} socket - The socket object for communication.
+   * @returns {void}
+   */
   handleXread(args, socket) {
     if (args[0].toLowerCase() !== 'block') {
       args = args.slice(1);
@@ -471,8 +479,33 @@ class MasterServer {
       socket.write(response);
       return;
     }
+
+    const timeoutTime = Number.parseInt(args[1], 10);
+    args = args.slice(3);
+    const mid = Math.ceil(args.length / 2);
+    const streamKeys = args.slice(0, mid);
+    startIds = args.slice(mid);
+    startIds = this.processStartIds(streamKeys, startIds);
+    this.block = { streamKeys, startIds, isDone: false };
+    this.block.socket = socket;
+    this.block.timeout = -1;
+    if (timeoutTime !== 0) {
+      this.block.timeout = setTimeout(() => {
+        const entries = this.dataStore.getStreamAfter(this.block.streamKeys, this.block.startIds);
+        const response = this.getXreadResponse(entries);
+        this.block.socket.write(response);
+        this.block.isDone = true;
+      }, timeoutTime);
+    }
+    this.checkBlock();
   }
 
+  /**
+   * Returns the XREAD response for the given entries.
+   *
+   * @param {Array} entries - The entries to process.
+   * @returns {Array|String} - The XREAD response.
+   */
   getXreadResponse(entries) {
     if (entries.length === 0) {
       return Encoder.createBulkString('nil', true);
@@ -498,6 +531,52 @@ class MasterServer {
       ret.push(Encoder.createArray(arr));
     }
     return Encoder.createArray(ret);
+  }
+
+  /**
+   * Processes the start IDs for the given stream keys.
+   *
+   * @param {Array<string>} streamKeys - The array of stream keys.
+   * @param {Array<string>} startIds - The array of start IDs.
+   * @returns {Array<string>} - The updated array of start IDs.
+   */
+  processStartIds(streamKeys, startIds) {
+    for (let i = 0; i < streamKeys.length; i++) {
+      const key = streamKeys[i];
+      let startId = startIds[i];
+      if (startId !== '$') continue;
+
+      const entries = this.dataStore.get(key);
+      if (entries === null || entries.length === 0) startId = '0-0';
+      const lastEntryId = entries.slice(-1)[0].id;
+      const lastEntryIdMS = lastEntryId.split('-')[0];
+      const lastEntryIdSeq = lastEntryId.split('-')[1];
+      startId = lastEntryIdMS + '-' + `${Number.parseInt(lastEntryIdSeq)}`
+      startIds[i] = startId
+    }
+    return startIds;
+  }
+
+  /**
+   * Checks the block and sends the appropriate response if it is not done.
+   */
+  checkBlock() {
+    if (!this.block || this.block.isDone) return;
+
+    const entries = this.dataStore.getStreamAfter(
+      this.block.streamKeys,
+      this.block.startIds
+    );
+
+    if (entries.length === 0) return;
+
+    const response = this.getXreadResponse(entries);
+    this.block.socket.write(response);
+    this.block.isDone = true;
+
+    if (this.block.timeout !== -1) {
+      clearTimeout(this.block.timeout);
+    }
   }
 }
 
