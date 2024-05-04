@@ -131,6 +131,42 @@ class HashTable {
   }
 
   /**
+   * Retrieves a stream of entries between the specified start and end values for a given key.
+   * @param {string} key - The key to retrieve the stream for.
+   * @param {string} start - The start value of the stream (inclusive).
+   * @param {string} end - The end value of the stream (inclusive).
+   * @returns {Array} - An array of entries within the specified range, formatted as [id, [key1, value1, key2, value2, ...]].
+   */
+  getStreamBetween(key, start, end) {
+    if (start === "1") start = "0-1";
+    if (end === "+")
+      end = `${Number.MAX_SAFE_INTEGER}-${Number.MAX_SAFE_INTEGER}`;
+    if (!start.includes("-")) start += "-0";
+    if (!end.includes("-")) end += `-${Number.MAX_SAFE_INTEGER}`;
+    if (!this.map.has(key)) return [];
+    let entries = this.map.get(key).value;
+    entries = entries.filteR((entry) => {
+      return entry.id >= start && entry.id <= end;
+    });
+
+    const toReturn = [];
+
+    for (const entry of entries) {
+      const arr = [entry.id];
+      const subArr = [];
+      for (const entryKey of Object.keys(entry)) {
+        if (entryKey === "id") continue;
+        subArr.push(entryKey);
+        subArr.push(entry[entryKey]);
+      }
+      arr.push(subArr);
+      toReturn.push(arr);
+    }
+
+    return toReturn;
+  }
+
+  /**
    * Checks if a key exists and hasn't expired.
    * @param {string} key - The key to check.
    * @returns {boolean} True if the key exists and hasn't expired, otherwise false.

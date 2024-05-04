@@ -147,8 +147,11 @@ class MasterServer {
       case "type":
         socket.write(this.handleType(args.slice(1)));
         break;
-      case 'xadd':
+      case "xadd":
         this.handleXadd(args.slice(1), socket);
+        break;
+      case "xrange":
+        socket.write(this.handleXrange(args.slice(1)));
         break;
     }
   }
@@ -380,6 +383,13 @@ class MasterServer {
     return Encoder.createSimpleString("none");
   }
 
+  /**
+   * Handles the XADD command by inserting a new entry into the specified stream.
+   *
+   * @param {Array} args - The arguments passed to the XADD command.
+   * @param {Socket} socket - The socket object for communication.
+   * @returns {void}
+   */
   handleXadd(args, socket) {
     const streamKey = args[0];
     const streamEntry = {};
@@ -392,26 +402,59 @@ class MasterServer {
       streamEntry[entryKey] = entryValue;
     }
 
-    if (streamEntryId === '0-0') {
+    if (streamEntryId === "0-0") {
       socket.write(
         Encoder.createSimpleError(
-          'ERR The ID specified in XADD must be greater than 0-0'
+          "ERR The ID specified in XADD must be greater than 0-0"
         )
-      )
-      return
+      );
+      return;
     }
 
     const entryId = this.dataStore.insertStream(streamKey, streamEntry);
     if (entryId === null) {
       socket.write(
         Encoder.createSimpleError(
-          'ERR The ID specified in XADD is equal or smaller than the target stream top item'
+          "ERR The ID specified in XADD is equal or smaller than the target stream top item"
         )
-      )
-      return
+      );
+      return;
     }
 
-    socket.write(Encoder.createBulkString(entryId))
+    socket.write(Encoder.createBulkString(entryId));
+  }
+
+  /**
+   * Handles the XRANGE command.
+   *
+   * @param {Array} args - The arguments passed to the XRANGE command.
+   * @returns {Array|BulkString} - The response to the XRANGE command.
+   */
+  handleXrange(args) {
+    const streamKey = args[0];
+    const startId = args[1];
+    const endId = args[2];
+    const entries = this.dataStore.getStreamBetween(streamKey, startId, endId);
+
+    if (entries.length === 0) {
+      return Encoder.createBulkString("nil");
+    }
+
+    const toReturn = [];
+    for (const entry of entries) {
+      const id = entry[0];
+      const keyValues = entry[1];
+      toReturn.push(
+        Encoder.createArray([
+          Encoder.createBulkString(id),
+          Encoder.createArray(
+            keyValues.map((value) => Encoder.createBulkString(value))
+          ),
+        ])
+      );
+    }
+
+    return Encoder.createArray(toReturn);
   }
 }
 
