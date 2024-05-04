@@ -73,6 +73,11 @@ function handleInfoCommand(commands) {
   return formatSimpleError('Invalid section specified');
 }
 
+function handleWaitCommand(commands) {
+  console.log('commands', commands);
+  return ':0\r\n';
+}
+
 function handleReplConfCommand(commands) {
   let subcommand = commands.shift().toLowerCase();
   if (subcommand === 'getack') {
@@ -118,6 +123,8 @@ function processCommand(command, commands, connection, fromReplica) {
       return handleGetCommand(commands);
     case 'INFO':
       return handleInfoCommand(commands);
+    case 'WAIT':
+      return handleWaitCommand(commands);
   }
 }
 
@@ -136,6 +143,7 @@ function handleCommands(connection, data, fromReplica = false) {
     case 'SET':
     case 'GET':
     case 'INFO':
+    case 'WAIT':
       response = processCommand(command, commands, connection, fromReplica);
       if (!fromReplica) sendMessage(connection, response);
       break;
@@ -161,5 +169,6 @@ module.exports = {
   handleSetCommand,
   handleGetCommand,
   handleInfoCommand,
+  handleWaitCommand,
   handleCommands,
 };
