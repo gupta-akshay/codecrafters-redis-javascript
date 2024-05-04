@@ -2,7 +2,7 @@
  * A simple hash table implementation with support for expiry timestamps.
  */
 class HashTable {
-   /**
+  /**
    * Constructs a new HashTable instance.
    */
   constructor() {

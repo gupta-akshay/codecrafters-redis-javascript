@@ -1,6 +1,6 @@
 const net = require("net");
-const fs = require('fs');
-const path = require('path');
+const fs = require("fs");
+const path = require("path");
 const Encoder = require("./Encoder");
 const RequestParser = require("./RequestParser");
 const HashTable = require("./HashTable");
@@ -347,13 +347,13 @@ class MasterServer {
    * @returns {string|Array} - The encoded response for the keys command.
    */
   handleKeys(args) {
-    if (args[0] === '*') {
-      const arr = this.dataStore.getAllKeys().map(value => {
+    if (args[0] === "*") {
+      const arr = this.dataStore.getAllKeys().map((value) => {
         return Encoder.createBulkString(value);
       });
       return Encoder.createArray(arr);
     }
-    return Encoder.createBulkString('', true);
+    return Encoder.createBulkString("", true);
   }
 }
 
