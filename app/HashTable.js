@@ -145,7 +145,7 @@ class HashTable {
     if (!end.includes("-")) end += `-${Number.MAX_SAFE_INTEGER}`;
     if (!this.map.has(key)) return [];
     let entries = this.map.get(key).value;
-    entries = entries.filteR((entry) => {
+    entries = entries.filter((entry) => {
       return entry.id >= start && entry.id <= end;
     });
 
