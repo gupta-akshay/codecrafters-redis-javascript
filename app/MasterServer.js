@@ -469,7 +469,7 @@ class MasterServer {
    * @returns {void}
    */
   handleXread(args, socket) {
-    if (args[0].toLowerCase() !== 'block') {
+    if (args[0].toLowerCase() !== "block") {
       args = args.slice(1);
       const mid = Math.ceil(args.length / 2);
       const streamKeys = args.slice(0, mid);
@@ -480,19 +480,22 @@ class MasterServer {
       return;
     }
 
-    const timeoutTime = Number.parseInt(args[1], 10);
+    let timeoutTime = Number.parseInt(args[1]);
     args = args.slice(3);
     const mid = Math.ceil(args.length / 2);
-    const streamKeys = args.slice(0, mid);
-    startIds = args.slice(mid);
+    let streamKeys = args.slice(0, mid);
+    let startIds = args.slice(mid);
     startIds = this.processStartIds(streamKeys, startIds);
     this.block = { streamKeys, startIds, isDone: false };
     this.block.socket = socket;
     this.block.timeout = -1;
-    if (timeoutTime !== 0) {
+    if (timeoutTime != 0) {
       this.block.timeout = setTimeout(() => {
-        const entries = this.dataStore.getStreamAfter(this.block.streamKeys, this.block.startIds);
-        const response = this.getXreadResponse(entries);
+        let entries = this.dataStore.getStreamAfter(
+          this.block.streamKeys,
+          this.block.startIds
+        );
+        let response = this.getXreadResponse(entries);
         this.block.socket.write(response);
         this.block.isDone = true;
       }, timeoutTime);
@@ -508,7 +511,7 @@ class MasterServer {
    */
   getXreadResponse(entries) {
     if (entries.length === 0) {
-      return Encoder.createBulkString('nil', true);
+      return Encoder.createBulkString("nil", true);
     }
     const ret = [];
     for (const keyEntries of entries) {
@@ -544,15 +547,15 @@ class MasterServer {
     for (let i = 0; i < streamKeys.length; i++) {
       const key = streamKeys[i];
       let startId = startIds[i];
-      if (startId !== '$') continue;
+      if (startId !== "$") continue;
 
       const entries = this.dataStore.get(key);
-      if (entries === null || entries.length === 0) startId = '0-0';
+      if (entries === null || entries.length === 0) startId = "0-0";
       const lastEntryId = entries.slice(-1)[0].id;
-      const lastEntryIdMS = lastEntryId.split('-')[0];
-      const lastEntryIdSeq = lastEntryId.split('-')[1];
-      startId = lastEntryIdMS + '-' + `${Number.parseInt(lastEntryIdSeq)}`
-      startIds[i] = startId
+      const lastEntryIdMS = lastEntryId.split("-")[0];
+      const lastEntryIdSeq = lastEntryId.split("-")[1];
+      startId = lastEntryIdMS + "-" + `${Number.parseInt(lastEntryIdSeq)}`;
+      startIds[i] = startId;
     }
     return startIds;
   }
