@@ -144,6 +144,9 @@ class MasterServer {
       case "keys":
         socket.write(this.handleKeys(args.slice(1)));
         break;
+      case "type":
+        socket.write(this.handleType(args.slice(1)));
+        break;
     }
   }
 
@@ -346,7 +349,7 @@ class MasterServer {
    * @returns {string|Array} - The encoded response for the keys command.
    */
   handleKeys(args) {
-    const key = args[0]
+    const key = args[0];
     if (key === "*") {
       const arr = this.dataStore.getAllKeys().map((value) => {
         return Encoder.createBulkString(value);
@@ -359,6 +362,19 @@ class MasterServer {
       }
       return Encoder.createBulkString(value);
     }
+  }
+
+  /**
+   * Handles the type command.
+   *
+   * @param {Array} args - The command arguments.
+   * @returns {string} - The response string.
+   */
+  handleType(args) {
+    const key = args[0];
+    const type = this.dataStore.getType(key);
+    if (type) return Encoder.createSimpleString(type);
+    return Encoder.createSimpleString("none");
   }
 }
 

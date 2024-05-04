@@ -53,6 +53,19 @@ class HashTable {
   }
 
   /**
+   * Retrieves the type of the value associated with the given key.
+   *
+   * @param {any} key - The key to retrieve the type for.
+   * @returns {string|null} The type of the value associated with the key, or null if the key does not exist.
+   */
+  getType(key) {
+    if (this.has(key)) {
+      return this.map.get(key).type;
+    }
+    return null;
+  }
+
+  /**
    * Checks if a key exists and hasn't expired.
    * @param {string} key - The key to check.
    * @returns {boolean} True if the key exists and hasn't expired, otherwise false.
