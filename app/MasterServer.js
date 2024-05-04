@@ -332,7 +332,6 @@ class MasterServer {
    * @returns {Array} - An array containing the encoded configuration.
    */
   handleConfig(args) {
-    const getCommand = args[0];
     const arg = args[1].toLowerCase();
     return Encoder.createArray([
       Encoder.createBulkString(arg),
