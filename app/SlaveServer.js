@@ -3,11 +3,26 @@ const Encoder = require("./Encoder");
 const RequestParser = require("./RequestParser");
 const HashTable = require("./HashTable");
 
+/**
+ * Generates a unique identifier for a socket using its remote address and port.
+ * @param {net.Socket} socket - The socket object.
+ * @returns {string} The unique identifier for the socket.
+ */
 function getUid(socket) {
-  return socket.remoteAddress + ":" + socket.remotePort;
+  return `${socket.remoteAddress}:${socket.remotePort}`;
 }
 
+/**
+ * Class representing a slave server that connects to a master server for data replication.
+ */
 class SlaveServer {
+  /**
+   * Creates an instance of the SlaveServer.
+   * @param {string} host - The local server host.
+   * @param {number|string} port - The local server port.
+   * @param {string} masterHost - The master server host.
+   * @param {number|string} masterPort - The master server port.
+   */
   constructor(host, port, masterHost, masterPort) {
     this.host = host;
     this.port = port;
@@ -21,6 +36,9 @@ class SlaveServer {
     this.masterOffset = 0;
   }
 
+  /**
+   * Starts the slave server and connects to the master server.
+   */
   startServer() {
     this.performHandshake();
     const server = net.createServer((socket) => {
@@ -43,10 +61,13 @@ class SlaveServer {
     });
 
     server.listen(this.port, this.host, () => {
-      console.log(`Server Listening on ${this.host}:${this.port}`);
+      console.log(`Slave Server Listening on ${this.host}:${this.port}`);
     });
   }
 
+  /**
+   * Performs the handshake process with the master server to establish replication capabilities.
+   */
   performHandshake() {
     const socket = net.createConnection(
       { host: this.masterHost, port: this.masterPort },
@@ -126,6 +147,10 @@ class SlaveServer {
     });
   }
 
+  /**
+   * Processes the buffer for a specific client socket, parsing commands and handling them.
+   * @param {net.Socket} socket - The client socket whose buffer is being processed.
+   */
   processClientBuffer(socket) {
     const clientKey = getUid(socket);
     const buffer = this.clientBuffers[clientKey];
@@ -140,6 +165,9 @@ class SlaveServer {
     this.clientBuffers[clientKey] = requestParser.getRemainingRequest();
   }
 
+  /**
+   * Processes the buffer received from the master server, parsing and handling replication commands.
+   */
   processMasterBuffer() {
     const buffer = this.masterBuffer;
     const requestParser = new RequestParser(buffer);
@@ -153,9 +181,14 @@ class SlaveServer {
     this.masterBuffer = requestParser.getRemainingRequest();
   }
 
+  /**
+   * Handles commands parsed from the client or master buffer based on their arguments.
+   * @param {net.Socket} socket - The socket on which the command was received.
+   * @param {string[]} args - The arguments of the command.
+   * @param {string} request - The full string of the command request.
+   */
   handleCommand(socket, args, request) {
     const command = args[0].toLowerCase();
-    console.log("command ---", command);
     switch (command) {
       case "info":
         socket.write(this.handleInfo(args.slice(1)));
@@ -172,6 +205,11 @@ class SlaveServer {
     }
   }
 
+  /**
+   * Handles the 'info' command, providing details about the server's state.
+   * @param {string[]} args - Arguments following the command.
+   * @returns {string} The server information formatted as a bulk string.
+   */
   handleInfo(args) {
     const section = args[0].toLowerCase();
     let response;
@@ -181,6 +219,10 @@ class SlaveServer {
     return response;
   }
 
+  /**
+   * Handles the 'set' command to insert a key-value pair into the data store.
+   * @param {string[]} args - Arguments containing the key and value, and optionally the expiry time.
+   */
   handleSet(args) {
     const key = args[0];
     const value = args[1];
@@ -193,6 +235,11 @@ class SlaveServer {
     }
   }
 
+  /**
+   * Handles the 'get' command to retrieve a value by key from the data store.
+   * @param {string[]} args - Arguments containing the key.
+   * @returns {string} The value associated with the key or a null bulk string if not found.
+   */
   handleGet(args) {
     const key = args[0];
     const value = this.dataStore.get(key);
@@ -202,6 +249,11 @@ class SlaveServer {
     return Encoder.createBulkString(value);
   }
 
+  /**
+   * Handles the 'replconf' command, typically used to acknowledge the state of replication.
+   * @param {string[]} args - Arguments for the replconf command.
+   * @returns {string} An array encoded as a bulk string, acknowledging the replication offset.
+   */
   handleReplconf(args) {
     return Encoder.createArray([
       Encoder.createBulkString("REPLCONF"),

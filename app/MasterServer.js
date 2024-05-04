@@ -3,66 +3,97 @@ const Encoder = require("./Encoder");
 const RequestParser = require("./RequestParser");
 const HashTable = require("./HashTable");
 
+/**
+ * Helper function to generate a unique identifier for a socket based on its address and port.
+ * @param {net.Socket} socket - The socket instance.
+ * @returns {string} A unique identifier for the socket.
+ */
 function getUid(socket) {
-  return socket.remoteAddress + ":" + socket.remotePort;
+  return `${socket.remoteAddress}:${socket.remotePort}`;
 }
 
+/**
+ * Class representing a master server handling commands and managing replication.
+ */
 class MasterServer {
+  /**
+   * Constructs a master server.
+   * @param {string} host - The host IP address or hostname the server will listen on.
+   * @param {number|string} port - The port number on which the server will listen.
+   * @param {Object} [config=null] - Configuration options for the server.
+   */
   constructor(host, port, config = null) {
     this.host = host;
     this.port = port;
-    this.dataStore = new HashTable();
-    this.clientBuffers = {};
+    this.dataStore = new HashTable(); // Initialize the data store as a hash table.
+    this.clientBuffers = {}; // To store buffers for each connected client.
 
+    // Replication related properties.
     this.masterReplId = "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb";
     this.masterReplOffset = 0;
-
-    this.replicas = {};
-    this.config = config;
+    this.replicas = {}; // Track connected replica servers.
+    this.config = config; // Server configuration.
   }
 
+  /**
+   * Starts the TCP server and handles incoming connections and data.
+   */
   startServer() {
     const server = net.createServer((socket) => {
       this.clientBuffers[getUid(socket)] = "";
 
+      // Data event handler to concatenate incoming data chunks.
       socket.on(`data`, (data) => {
         this.clientBuffers[getUid(socket)] += data.toString();
         this.processClientBuffer(socket);
       });
 
+      // Error event handler.
       socket.on("error", (err) => {
         console.log(`Socket Error: ${err}`);
         delete this.clientBuffers[getUid(socket)];
       });
 
+      // Close event handler.
       socket.on(`close`, () => {
         console.log(`Disconnecting client: ${getUid(socket)}`);
         delete this.clientBuffers[getUid(socket)];
       });
     });
 
+    // Start listening on the specified host and port.
     server.listen(this.port, this.host, () => {
       console.log(`Server Listening on ${this.host}:${this.port}`);
     });
   }
 
+  /**
+   * Processes buffered commands from a client socket.
+   * @param {net.Socket} socket - The client socket.
+   */
   processClientBuffer(socket) {
     const clientKey = getUid(socket);
     const buffer = this.clientBuffers[clientKey];
     const requestParser = new RequestParser(buffer);
     while (true) {
-      const args = requestParser.parse();
+      const args = requestParser.parse(); // Parse arguments from the buffer.
       if (args.length === 0) break;
       const currentRequest = requestParser.currentRequest;
-      this.handleCommand(socket, args, currentRequest);
+      this.handleCommand(socket, args, currentRequest); // Handle parsed commands.
     }
 
+    // Store remaining buffer data back into the clientBuffers.
     this.clientBuffers[clientKey] = requestParser.getRemainingRequest();
   }
 
+  /**
+   * Handles commands received from clients.
+   * @param {net.Socket} socket - The client socket.
+   * @param {Array<string>} args - Arguments of the command.
+   * @param {string} request - The raw request string.
+   */
   handleCommand(socket, args, request) {
     const command = args[0].toLowerCase();
-    console.log('master command : ', command);
     switch (command) {
       case "ping":
         socket.write(this.handlePing());
@@ -85,7 +116,7 @@ class MasterServer {
         break;
       case "psync":
         socket.write(this.handlePsync(args.slice(1), socket));
-        this.replicas[getUid(socket)] = { socket, state: "connected" };
+        this.replicas[getUid(socket)] = { socket, state: "connected" }; // Register the replica
         break;
       case "wait":
         this.handleWait(args.slice(1), socket, request);
@@ -93,14 +124,28 @@ class MasterServer {
     }
   }
 
+  /**
+   * Handles the 'ping' command by returning a standard response.
+   * @returns {string} Encoded simple string "PONG".
+   */
   handlePing() {
     return Encoder.createSimpleString("PONG");
   }
 
+  /**
+   * Handles the 'echo' command by returning the input argument as a bulk string.
+   * @param {string[]} args - Array containing the string to echo.
+   * @returns {string} Encoded bulk string of the echoed argument.
+   */
   handleEcho(args) {
     return Encoder.createBulkString(args[0]);
   }
 
+  /**
+   * Handles the 'set' command to store a key-value pair, optionally with an expiry.
+   * @param {string[]} args - Arguments containing the key, value, and optional expiry time.
+   * @returns {string} Confirmation of the operation as an encoded simple string "OK".
+   */
   handleSet(args) {
     const key = args[0];
     const value = args[1];
@@ -114,6 +159,11 @@ class MasterServer {
     return Encoder.createSimpleString("OK");
   }
 
+  /**
+   * Handles the 'get' command to retrieve a value by key.
+   * @param {string[]} args - Array containing the key.
+   * @returns {string} The value associated with the key as a bulk string, or null bulk string if key not found.
+   */
   handleGet(args) {
     const key = args[0];
     const value = this.dataStore.get(key);
@@ -123,6 +173,11 @@ class MasterServer {
     return Encoder.createBulkString(value);
   }
 
+  /**
+   * Handles the 'info' command to provide server status information.
+   * @param {string[]} args - Array containing the section to return information about.
+   * @returns {string} Encoded bulk string containing the requested information.
+   */
   handleInfo(args) {
     const section = args[0].toLowerCase();
     let response = "";
@@ -134,6 +189,11 @@ class MasterServer {
     return Encoder.createBulkString(response);
   }
 
+  /**
+   * Handles the 'replconf' command for replica configuration.
+   * @param {string[]} args - Array containing configuration arguments.
+   * @param {net.Socket} socket - The socket to which the response should be sent.
+   */
   handleReplconf(args, socket) {
     const arg = args[0].toLowerCase();
     if (arg === "ack") {
@@ -143,6 +203,12 @@ class MasterServer {
     }
   }
 
+  /**
+   * Handles the 'psync' command for initializing synchronization with a replica.
+   * @param {string[]} args - Array containing synchronization arguments.
+   * @param {net.Socket} socket - The socket to which the response should be sent.
+   * @returns {Buffer} Final buffer containing synchronization data.
+   */
   handlePsync(args, socket) {
     socket.write(
       Encoder.createSimpleString(
@@ -159,6 +225,10 @@ class MasterServer {
     return finalBuffer;
   }
 
+  /**
+   * Propagates a request to all connected replicas.
+   * @param {string} request - The raw request string to be propagated.
+   */
   propagate(request) {
     for (const replica of Object.values(this.replicas)) {
       const socket = replica.socket;
@@ -167,6 +237,12 @@ class MasterServer {
     this.masterReplOffset += request.length;
   }
 
+  /**
+   * Handles the 'wait' command for synchronization wait logic.
+   * @param {string[]} args - Arguments containing number of required replicas and timeout.
+   * @param {net.Socket} socket - The socket on which to perform the wait.
+   * @param {string} request - The request associated with the wait.
+   */
   handleWait(args, socket, request) {
     if (Object.keys(this.replicas).length === 0) {
       socket.write(Encoder.createInteger(0));
@@ -203,6 +279,9 @@ class MasterServer {
     }
   }
 
+  /**
+   * Responds to a wait request after the timeout or when conditions are met.
+   */
   respondToWait() {
     clearTimeout(this.wait.timeout);
     this.masterReplOffset += this.wait.request.length;
@@ -210,6 +289,10 @@ class MasterServer {
     this.wait.isDone = true;
   }
 
+  /**
+   * Acknowledges the reception of data from a replica up to the specified offset.
+   * @param {number} replicaOffset - The offset up to which data has been received.
+   */
   acknowledgeReplica(replicaOffset) {
     if (this.wait.isDone) return;
     if (replicaOffset >= this.masterReplOffset) {
