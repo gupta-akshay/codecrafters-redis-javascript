@@ -147,6 +147,9 @@ class MasterServer {
       case "type":
         socket.write(this.handleType(args.slice(1)));
         break;
+      case 'xadd':
+        this.handleXadd(args.slice(1), socket);
+        break;
     }
   }
 
@@ -375,6 +378,40 @@ class MasterServer {
     const type = this.dataStore.getType(key);
     if (type) return Encoder.createSimpleString(type);
     return Encoder.createSimpleString("none");
+  }
+
+  handleXadd(args, socket) {
+    const streamKey = args[0];
+    const streamEntry = {};
+    const streamEntryId = args[1];
+    streamEntry.id = streamEntryId;
+
+    for (let i = 2; i < args.length; i += 2) {
+      let entryKey = args[i];
+      let entryValue = args[i + 1];
+      streamEntry[entryKey] = entryValue;
+    }
+
+    if (streamEntryId === '0-0') {
+      socket.write(
+        Encoder.createSimpleError(
+          'ERR The ID specified in XADD must be greater than 0-0'
+        )
+      )
+      return
+    }
+
+    const entryId = this.dataStore.insertStream(streamKey, streamEntry);
+    if (entryId === null) {
+      socket.write(
+        Encoder.createSimpleError(
+          'ERR The ID specified in XADD is equal or smaller than the target stream top item'
+        )
+      )
+      return
+    }
+
+    socket.write(Encoder.createBulkString(entryId))
   }
 }
 

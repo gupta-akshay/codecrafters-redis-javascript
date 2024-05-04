@@ -41,6 +41,71 @@ class HashTable {
   }
 
   /**
+   * Inserts a value into the hash table as a stream.
+   *
+   * @param {string} key - The key to insert the value under.
+   * @param {object} value - The value to insert.
+   * @returns {string|null} - The ID of the inserted value, or null if insertion is unsuccessful.
+   */
+  insertStream(key, value) {
+    if (!this.map.has(key)) this.map.set(key, { value: [], type: "stream" });
+    let existingValue = this.map.get(key);
+
+    let currentId = value.id;
+
+    if (currentId === "*") {
+      currentId = `${Date.now()}-*`;
+    }
+
+    let currentIdMillis = currentId.split("-")[0];
+    let currentIdSequence = currentId.split("-")[1];
+
+    if (currentIdSequence === "*") {
+      if (existingValue.value.length === 0) {
+        if (currentIdMillis === "0") currentIdSequence = "1";
+        else currentIdSequence = "0";
+        currentId = currentIdMillis + "-" + currentIdSequence;
+      } else {
+        let lastEntry = existingValue.value.slice(-1)[0];
+        let lastId = lastEntry["id"].split("-");
+        let lastIdMilisecond = lastId[0];
+        let lastIdSequence = lastId[1];
+
+        if (currentIdMillis < lastIdMilisecond) return null;
+        if (currentIdMillis === lastIdMilisecond) {
+          currentIdSequence = `${parseInt(lastIdSequence) + 1}`;
+          currentId = currentIdMillis + "-" + currentIdSequence;
+        } else {
+          currentIdSequence = "0";
+          currentId = currentIdMillis + "-" + currentIdSequence;
+        }
+      }
+      value["id"] = currentId;
+      existingValue.value.push(value);
+      this.map.set(key, existingValue);
+      return currentId;
+    }
+
+    if (existingValue.value.length !== 0) {
+      let lastEntry = existingValue.value.slice(-1)[0];
+      let lastId = lastEntry["id"];
+      let lastIdMilisecond = lastId.split("-")[0];
+      let lastIdSequence = lastId.split("-")[1];
+
+      if (currentIdMillis < lastIdMilisecond) return null;
+      if (
+        currentIdMillis === lastIdMilisecond &&
+        currentIdSequence <= lastIdSequence
+      )
+        return null;
+    }
+
+    existingValue.value.push(value);
+    this.map.set(key, existingValue);
+    return currentId;
+  }
+
+  /**
    * Retrieves a value by its key if it hasn't expired.
    * @param {string} key - The key whose value is to be retrieved.
    * @returns {any|null} The value if found and not expired, otherwise null.
