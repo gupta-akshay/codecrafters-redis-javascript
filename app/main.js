@@ -14,8 +14,7 @@ function init(args) {
   // Check if no arguments were provided and start a MasterServer on default port.
   if (args.length === 0) {
     const server = new MasterServer(HOST, PORT);
-    server.startServer();
-    return;
+    return server.startServer();
   }
 
   // First argument should be a flag indicating the operation mode or configuration.
