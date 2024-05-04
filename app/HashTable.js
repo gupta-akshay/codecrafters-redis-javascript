@@ -65,6 +65,14 @@ class HashTable {
     }
     return true;
   }
+
+  /**
+   * Retrieves all the keys from the hash table.
+   * @returns {Array} An array containing all the keys in the hash table.
+   */
+  getAllKeys() {
+    return [...this.map.keys()];
+  }
 }
 
 module.exports = HashTable;

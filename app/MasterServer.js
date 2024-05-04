@@ -1,7 +1,10 @@
 const net = require("net");
+const fs = require('fs');
+const path = require('path');
 const Encoder = require("./Encoder");
 const RequestParser = require("./RequestParser");
 const HashTable = require("./HashTable");
+const RDBParser = require("./RDBParser");
 
 /**
  * Helper function to generate a unique identifier for a socket based on its address and port.
@@ -39,6 +42,7 @@ class MasterServer {
    * Starts the TCP server and handles incoming connections and data.
    */
   startServer() {
+    this.loadRDBFile();
     const server = net.createServer((socket) => {
       this.clientBuffers[getUid(socket)] = "";
 
@@ -65,6 +69,19 @@ class MasterServer {
     server.listen(this.port, this.host, () => {
       console.log(`Server Listening on ${this.host}:${this.port}`);
     });
+  }
+
+  /**
+   * Loads the RDB file and parses its contents into the data store.
+   */
+  loadRDBFile() {
+    if (!this.config) return;
+    const filePath = path.join(this.config["dir"], this.config["dbFilename"]);
+    if (!fs.existsSync(filePath)) return;
+    const fileBuffer = fs.readFileSync(filePath);
+    const rdbParser = new RDBParser(fileBuffer);
+    rdbParser.parse();
+    this.dataStore = rdbParser.dataStore;
   }
 
   /**
@@ -123,6 +140,9 @@ class MasterServer {
         break;
       case "config":
         socket.write(this.handleConfig(args.slice(1)));
+        break;
+      case "keys":
+        socket.write(this.handleKeys(args.slice(1)));
         break;
     }
   }
@@ -305,6 +325,12 @@ class MasterServer {
     }
   }
 
+  /**
+   * Handles the configuration based on the provided arguments.
+   *
+   * @param {Array} args - The arguments passed to the function.
+   * @returns {Array} - An array containing the encoded configuration.
+   */
   handleConfig(args) {
     const getCommand = args[0];
     const arg = args[1].toLowerCase();
@@ -312,6 +338,22 @@ class MasterServer {
       Encoder.createBulkString(arg),
       Encoder.createBulkString(this.config[arg]),
     ]);
+  }
+
+  /**
+   * Handles the keys command.
+   *
+   * @param {Array} args - The arguments passed to the keys command.
+   * @returns {string|Array} - The encoded response for the keys command.
+   */
+  handleKeys(args) {
+    if (args[0] === '*') {
+      const arr = this.dataStore.getAllKeys().map(value => {
+        return Encoder.createBulkString(value);
+      });
+      return Encoder.createArray(arr);
+    }
+    return Encoder.createBulkString('', true);
   }
 }
 
