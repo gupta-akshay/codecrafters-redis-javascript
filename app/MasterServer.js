@@ -153,6 +153,9 @@ class MasterServer {
       case "xrange":
         socket.write(this.handleXrange(args.slice(1)));
         break;
+      case "xread":
+        this.handleXread(args.slice(1), socket);
+        break;
     }
   }
 
@@ -455,6 +458,46 @@ class MasterServer {
     }
 
     return Encoder.createArray(toReturn);
+  }
+
+  handleXread(args, socket) {
+    if (args[0].toLowerCase() !== 'block') {
+      args = args.slice(1);
+      const mid = Math.ceil(args.length / 2);
+      const streamKeys = args.slice(0, mid);
+      const startIds = args.slice(mid);
+      const entries = this.dataStore.getStreamAfter(streamKeys, startIds);
+      const response = this.getXreadResponse(entries);
+      socket.write(response);
+      return;
+    }
+  }
+
+  getXreadResponse(entries) {
+    if (entries.length === 0) {
+      return Encoder.createBulkString('nil', true);
+    }
+    const ret = [];
+    for (const keyEntries of entries) {
+      const key = keyEntries[0];
+      const arr = [Encoder.createBulkString(key)];
+      const entriesForKey = [];
+      for (const entries of keyEntries[1]) {
+        const id = entries[0];
+        const keyValues = entries[1];
+        entriesForKey.push(
+          Encoder.createArray([
+            Encoder.createBulkString(id),
+            Encoder.createArray(
+              keyValues.map((value) => Encoder.createBulkString(value))
+            ),
+          ])
+        );
+      }
+      arr.push(Encoder.createArray(entriesForKey));
+      ret.push(Encoder.createArray(arr));
+    }
+    return Encoder.createArray(ret);
   }
 }
 

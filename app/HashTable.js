@@ -167,6 +167,45 @@ class HashTable {
   }
 
   /**
+   * Retrieves a stream of entries for each given key, starting from the specified startIds.
+   *
+   * @param {Array<string>} keys - The keys to retrieve the stream for.
+   * @param {Array<number>} startIds - The startIds for each key.
+   * @returns {Array<Array<any>>} - An array of arrays representing the stream of entries for each key.
+   */
+  getStreamAfter(keys, startIds) {
+    const toReturn = [];
+    for (let i = 0; i < keys.length; i++) {
+      const key = keys[i];
+      const start = startIds[i];
+      if (!this.map.has(key)) continue;
+      let entries = this.map.get(key).value;
+      entries = entries.filter((entry) => {
+        return entry.id > start;
+      });
+
+      const ret = [key];
+      const entriesForKey = [];
+      for (const entry of entries) {
+        const arr = [entry.id];
+        const subArr = [];
+        for (const entryKey of Object.keys(entry)) {
+          if (entryKey === "id") continue;
+          subArr.push(entryKey);
+          subArr.push(entry[entryKey]);
+        }
+        arr.push(subArr);
+        entriesForKey.push(arr);
+      }
+      if (entriesForKey.length === 0) continue;
+      ret.push(entriesForKey);
+      toReturn.push(ret);
+    }
+
+    return toReturn;
+  }
+
+  /**
    * Checks if a key exists and hasn't expired.
    * @param {string} key - The key to check.
    * @returns {boolean} True if the key exists and hasn't expired, otherwise false.
