@@ -1,16 +1,33 @@
-const net = require("net");
-const { globalConfig, args, replicationInfo, getPortFromArgs } = require('./config');
-const { configureReplication, replicaConnection } = require('./replication');
-const { handleCommands } = require('./commandHandlers');
+const MasterServer = require('./MasterServer');
+const SlaveServer = require('./SlaveServer');
 
-globalConfig.PORT = getPortFromArgs(args);
-configureReplication(args);
-if (replicationInfo.role === 'slave') replicaConnection();
+const HOST = 'localhost';
+const PORT = '6379';
 
-const server = net.createServer((connection) => {
-  connection.on('data', (data) => {
-    handleCommands(connection, data);
-  });
-});
+function init(args) {
+  if (args.length === 0) {
+    const server = new MasterServer(HOST, PORT);
+    server.startServer();
+    return;
+  }
 
-server.listen(globalConfig.PORT, "127.0.0.1");
+  const flag = args[0];
+  if (flag === '--port') {
+    if (args.length === 2) {
+      const port = args[1];
+      const server = new MasterServer(HOST, port);
+      return server.startServer();
+    }
+
+    if (args.length === 5) {
+      const port = args[1];
+      const replicaFlag = args[2];
+      const masterHost = args[3];
+      const masterPort = args[4];
+      const server = new SlaveServer(HOST, port, masterHost, masterPort);
+      return server.startServer();
+    }
+  }
+}
+
+init(process.argv.slice(2));
