@@ -347,13 +347,19 @@ class MasterServer {
    * @returns {string|Array} - The encoded response for the keys command.
    */
   handleKeys(args) {
-    if (args[0] === "*") {
+    const key = args[0]
+    if (key === "*") {
       const arr = this.dataStore.getAllKeys().map((value) => {
         return Encoder.createBulkString(value);
       });
       return Encoder.createArray(arr);
+    } else {
+      const value = this.dataStore.get(key);
+      if (value === null) {
+        return Encoder.createBulkString("", true);
+      }
+      return Encoder.createBulkString(value);
     }
-    return Encoder.createBulkString("", true);
   }
 }
 
